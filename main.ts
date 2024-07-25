@@ -132,7 +132,7 @@ export default class MyPlugin extends Plugin {
 title: '${title || ""}'
 date: '${dateString}'
 lastmod: '${dateString}'
-tags: '${title ? "[]": "[闲谈]"}'
+tags: ${title ? "[]": "[闲谈]"}
 draft: false
 summary: ''
 ---`;
