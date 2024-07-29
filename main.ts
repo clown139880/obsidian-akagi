@@ -118,9 +118,24 @@ export default class MyPlugin extends Plugin {
 			message: `Add new blog post: ${filename}`,
 			content: base64Content,
 			branch: this.settings.branch,
+			sha: undefined as string | undefined,
 		};
 
 		try {
+			// 获取文件SHA，如果存在则进行更新
+			const getResponse = await fetch(url, {
+				method: "GET",
+				headers: {
+					Authorization: `token ${this.settings.githubToken}`,
+					"Content-Type": "application/json",
+				},
+			});
+
+			if (getResponse.ok) {
+				const fileData = await getResponse.json();
+				body.sha = fileData.sha;
+			}
+
 			const response = await fetch(url, {
 				method: "PUT",
 				headers: {
