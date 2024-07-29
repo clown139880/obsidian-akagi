@@ -5,13 +5,20 @@ import {
 	Setting,
 	Notice,
 	TFile,
+	MarkdownView,
+	Editor,
 } from "obsidian";
+import OSS from "ali-oss";
 
 interface MyPluginSettings {
 	githubToken: string;
 	repoOwner: string;
 	repoName: string;
 	branch: string;
+	ossAccessKeyId: string;
+	ossAccessKeySecret: string;
+	ossBucket: string;
+	ossRegion: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
@@ -19,6 +26,10 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 	repoOwner: "clown139880",
 	repoName: "next-akagi",
 	branch: "main",
+	ossAccessKeyId: "",
+	ossAccessKeySecret: "",
+	ossBucket: "",
+	ossRegion: "",
 };
 
 export default class MyPlugin extends Plugin {
@@ -99,6 +110,15 @@ export default class MyPlugin extends Plugin {
 		});
 
 		this.addSettingTab(new MyPluginSettingTab(this.app, this));
+
+		// // 监听粘贴事件
+		// this.registerDomEvent(document, "paste", (event: ClipboardEvent) => {
+		// 	const editor =
+		// 		this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+		// 	if (editor) {
+		// 		this.handlePaste(event, editor);
+		// 	}
+		// });
 	}
 
 	onunload() {
@@ -191,6 +211,53 @@ summary: ''
 		await this.app.vault.modify(file, updatedContent);
 	}
 
+	async handlePaste(event: ClipboardEvent, editor: Editor) {
+		const items = event.clipboardData?.files;
+		if (!items) return;
+
+		for (let i = 0; i < items.length; i++) {
+			const item = items[i];
+			new Notice(`Pasting file: ${item.name} (${item.type})`);
+			if (item.type.startsWith("image/")) {
+				const imageUrl = await this.uploadImageToOSS(item).catch(
+					(error) => {
+						new Notice(`Failed to upload image: ${error.message}`);
+						return null;
+					}
+				);
+				if (imageUrl) {
+					editor.replaceSelection(`![${item.name}](${imageUrl})`);
+				}
+				event.preventDefault();
+			}
+		}
+	}
+
+	async uploadImageToOSS(file: File): Promise<string | null> {
+		const client = new OSS({
+			region: this.settings.ossRegion,
+			accessKeyId: this.settings.ossAccessKeyId,
+			accessKeySecret: this.settings.ossAccessKeySecret,
+			bucket: this.settings.ossBucket,
+			secure: true,
+		});
+		(client as any).agent = (client as any).urllib.agent;
+		(client as any).httpsAgent = (client as any).urllib.httpsAgent;
+
+		const now = new Date();
+		const year = now.getFullYear();
+		const mon = String(now.getMonth() + 1).padStart(2, "0");
+
+		const fileName = `/blog/${year}${mon}/${file.name}`;
+		try {
+			const result = await client.put(fileName, file);
+			return result.url;
+		} catch (error) {
+			new Notice(`Failed to upload image: ${error.message}`);
+			return null;
+		}
+	}
+
 	async loadSettings() {
 		this.settings = Object.assign(
 			{},
@@ -266,6 +333,58 @@ class MyPluginSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.branch)
 					.onChange(async (value) => {
 						this.plugin.settings.branch = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("OSS Access Key ID")
+			.setDesc("Your OSS Access Key ID")
+			.addText((text) =>
+				text
+					.setPlaceholder("Enter your OSS Access Key ID")
+					.setValue(this.plugin.settings.ossAccessKeyId)
+					.onChange(async (value) => {
+						this.plugin.settings.ossAccessKeyId = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("OSS Access Key Secret")
+			.setDesc("Your OSS Access Key Secret")
+			.addText((text) =>
+				text
+					.setPlaceholder("Enter your OSS Access Key Secret")
+					.setValue(this.plugin.settings.ossAccessKeySecret)
+					.onChange(async (value) => {
+						this.plugin.settings.ossAccessKeySecret = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("OSS Bucket")
+			.setDesc("Your OSS Bucket Name")
+			.addText((text) =>
+				text
+					.setPlaceholder("Enter your OSS Bucket Name")
+					.setValue(this.plugin.settings.ossBucket)
+					.onChange(async (value) => {
+						this.plugin.settings.ossBucket = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("OSS Region")
+			.setDesc("Your OSS Region")
+			.addText((text) =>
+				text
+					.setPlaceholder("Enter your OSS Region")
+					.setValue(this.plugin.settings.ossRegion)
+					.onChange(async (value) => {
+						this.plugin.settings.ossRegion = value;
 						await this.plugin.saveSettings();
 					})
 			);
