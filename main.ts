@@ -155,10 +155,7 @@ export default class MyPlugin extends Plugin {
 
 	generateMetadata(title?: string): string {
 		const now = new Date();
-		const dateString = now
-			.toISOString()
-			.replace(/T/, " ")
-			.replace(/\..+/, "");
+		const dateString = formatLocalDateTime(now);
 		return `---
 title: '${title || ""}'
 date: '${dateString}'
@@ -171,10 +168,7 @@ summary: ''
 
 	async updateLastMod(file: TFile, content: string) {
 		const metadata = this.extractMetadata(content);
-		const newLastMod = `lastmod: '${new Date()
-			.toISOString()
-			.replace(/T/, " ")
-			.replace(/\..+/, "")}'`;
+		const newLastMod = `lastmod: '${formatLocalDateTime(new Date())}'`;
 		const updatedMetadata = metadata.replace(/lastmod: .*/, newLastMod);
 		const updatedContent = `${updatedMetadata}\n${this.stripMetadata(
 			content
@@ -276,4 +270,15 @@ function getNowDate() {
 
 	// 组合成需要的格式
 	return `${year}${month}${day}${hours}${minutes}${seconds}`;
+}
+
+function formatLocalDateTime(date: Date) {
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, "0");
+	const day = String(date.getDate()).padStart(2, "0");
+	const hours = String(date.getHours()).padStart(2, "0");
+	const minutes = String(date.getMinutes()).padStart(2, "0");
+	const seconds = String(date.getSeconds()).padStart(2, "0");
+
+	return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
