@@ -31,7 +31,7 @@ export default class MyPlugin extends Plugin {
 		this.registerEvent(
 			this.app.workspace.on("editor-menu", (menu, editor) => {
 				menu.addItem((item) => {
-					item.setTitle("Publish Selected Record")
+					item.setTitle("Akagi:发布选中内容")
 						.setIcon("paper-plane")
 						.onClick(() => {
 							const selectedText = editor.getSelection();
@@ -51,19 +51,50 @@ export default class MyPlugin extends Plugin {
 
 		this.addCommand({
 			id: "publish-entire-article",
-			name: "Publish Entire Article",
+			name: "Akagi:发布全文",
+			editorCallback: (editor, view) => {
+				const entireText = editor.getValue();
+				const metadata = this.extractMetadata(entireText);
+				let content = this.stripMetadata(entireText);
+
+				content = content
+					.split("\n")
+					.map((line) => {
+						if (!line.endsWith("  ")) {
+							return line + "  ";
+						} else {
+							return line;
+						}
+					})
+					.join("\n");
+
+				const fullContent = metadata
+					? `${metadata}\n${content}`
+					: this.generateMetadata(view.file?.basename) +
+					  "\n" +
+					  content;
+				this.publishContent(
+					fullContent,
+					view.file?.basename || `闲谈-${getNowDate()}`,
+					view.file
+				);
+			},
+		});
+
+		this.addCommand({
+			id: "update-metadata",
+			name: "Akagi:添加或更新元数据",
 			editorCallback: (editor, view) => {
 				const entireText = editor.getValue();
 				const metadata = this.extractMetadata(entireText);
 				const content = this.stripMetadata(entireText);
 				const fullContent = metadata
 					? `${metadata}\n${content}`
-					: this.generateMetadata(view.file?.basename) + "\n" + content;
-				this.publishContent(
-					fullContent,
-					`article-${Date.now()}`,
-					view.file
-				);
+					: this.generateMetadata(view.file?.basename) +
+					  "\n" +
+					  content;
+
+				this.updateLastMod(view.file!, fullContent);
 			},
 		});
 
@@ -132,7 +163,7 @@ export default class MyPlugin extends Plugin {
 title: '${title || ""}'
 date: '${dateString}'
 lastmod: '${dateString}'
-tags: ${title ? "[]": "[闲谈]"}
+tags: ${title ? "[]" : "[闲谈]"}
 draft: false
 summary: ''
 ---`;
