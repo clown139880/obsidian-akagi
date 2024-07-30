@@ -23,6 +23,6 @@
 	},
 	"dependencies": {
 		"@types/ali-oss": "^6.16.11",
-		"ali-oss": "^6.20.0"
+		"ali-oss": "6.17.1"
 	}
 }

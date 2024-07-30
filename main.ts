@@ -111,14 +111,10 @@ export default class MyPlugin extends Plugin {
 
 		this.addSettingTab(new MyPluginSettingTab(this.app, this));
 
-		// // 监听粘贴事件
-		// this.registerDomEvent(document, "paste", (event: ClipboardEvent) => {
-		// 	const editor =
-		// 		this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
-		// 	if (editor) {
-		// 		this.handlePaste(event, editor);
-		// 	}
-		// });
+		// 监听粘贴事件
+		this.registerEvent(
+			this.app.workspace.on("editor-paste", this.customPasteEventCallback)
+		);
 	}
 
 	onunload() {
@@ -211,27 +207,29 @@ summary: ''
 		await this.app.vault.modify(file, updatedContent);
 	}
 
-	async handlePaste(event: ClipboardEvent, editor: Editor) {
-		const items = event.clipboardData?.files;
-		if (!items) return;
+	private customPasteEventCallback = async (
+		e: ClipboardEvent,
+		editor: Editor,
+		markdownView: MarkdownView
+	) => {
+		if (e instanceof PasteEventCopy) return;
 
-		for (let i = 0; i < items.length; i++) {
-			const item = items[i];
-			new Notice(`Pasting file: ${item.name} (${item.type})`);
-			if (item.type.startsWith("image/")) {
-				const imageUrl = await this.uploadImageToOSS(item).catch(
-					(error) => {
-						new Notice(`Failed to upload image: ${error.message}`);
-						return null;
-					}
-				);
-				if (imageUrl) {
-					editor.replaceSelection(`![${item.name}](${imageUrl})`);
-				}
-				event.preventDefault();
+		const files = e.clipboardData?.files;
+
+		if (!files || !allFilesAreImages(files)) return;
+
+		e.preventDefault();
+
+		for (let i = 0; i < files.length; i += 1) {
+			const url = await this.uploadImageToOSS(files[i]).catch(() => {
+				new Notice("Failed to upload image");
+				return null;
+			});
+			if (url) {
+				editor.replaceSelection(`![${files[i].name}](${url})`);
 			}
 		}
-	}
+	};
 
 	async uploadImageToOSS(file: File): Promise<string | null> {
 		const client = new OSS({
@@ -248,7 +246,9 @@ summary: ''
 		const year = now.getFullYear();
 		const mon = String(now.getMonth() + 1).padStart(2, "0");
 
-		const fileName = `/blog/${year}${mon}/${file.name}`;
+		const fileName = `/blog/${year}${mon}/${getNowDate()}.${
+			file.name.split(".")[1]
+		}`;
 		try {
 			const result = await client.put(fileName, file);
 			return result.url;
@@ -415,4 +415,28 @@ function formatLocalDateTime(date: Date) {
 	const seconds = String(date.getSeconds()).padStart(2, "0");
 
 	return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+class PasteEventCopy extends ClipboardEvent {
+	constructor(originalEvent: ClipboardEvent) {
+		const files = originalEvent.clipboardData?.files;
+		if (!files) {
+			throw new Error("No files found in clipboard data");
+		}
+		const dt = new DataTransfer();
+		for (let i = 0; i < files.length; i += 1) {
+			files.item(i) && dt.items.add(files.item(i)!);
+		}
+		super("paste", { clipboardData: dt });
+	}
+}
+
+function allFilesAreImages(files: FileList) {
+	if (files.length === 0) return false;
+
+	for (let i = 0; i < files.length; i += 1) {
+		if (!files[i].type.startsWith("image")) return false;
+	}
+
+	return true;
 }
